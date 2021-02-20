@@ -14,13 +14,12 @@ using TMPro;
 public class GPSscript : MonoBehaviour
 {
     public int desiredAccuracy = 1;
-    public int updateDistance = 5;
+    public int updateDistance = 1;
     public float updateFrequency = 1f;
 
     public TextMeshProUGUI debugUI;
     public TextMeshProUGUI secondaryDebugUI;
     public AudioSource coinSound;   
-
     public Animator animator;
 
     public int coinPoints = 5;
@@ -56,8 +55,6 @@ public class GPSscript : MonoBehaviour
     }
 
     // Initializes the location service.
-    // Based mostly on the example code provided by Unity documentation
-    // https://docs.unity3d.com/ScriptReference/LocationService.Start.html
     IEnumerator InitializeLocationService()
     {
         // First check if the user has location service enabled
@@ -106,7 +103,7 @@ public class GPSscript : MonoBehaviour
         {
             tick++;
 
-            // This is pretty much for the only poll, since otherwise it would put crazy 
+            // This is pretty much for the first poll, since otherwise it would put crazy 
             // values as distance travelled and speed for the first tick
             if (oldCoordinates.x == 0 || oldCoordinates.y == 0)
             {
@@ -128,10 +125,10 @@ public class GPSscript : MonoBehaviour
             oldCoordinates = newCoordinates;
 
             string temp = String.Format("fetching new coords \n" +
+                                        "Tick: {3}\n" +
                                         "Latitude: {0}\n" +
                                         "Longitude: {1}\n" +
                                         "Speed: {2} m/s\n" +
-                                        "Tick: {3}\n" +
                                         "Distance Travelled: {4:f2} m\n" +
                                         "Points: {5}", newCoordinates.x, newCoordinates.y, currentSpeed, tick, distanceTravelled, points);
             UpdateDebugText(temp);
@@ -162,6 +159,7 @@ public class GPSscript : MonoBehaviour
             points += coinPoints;
             Destroy(other.gameObject);
             coinSound.Play();
+
             // A bit of silly hardcode but it'll have to do for now
             if(points == 100)
             {
@@ -206,7 +204,7 @@ public class GPSscript : MonoBehaviour
         return (float)distance;
     }
 
-    public void UpdateDebugText(string text)
+    void UpdateDebugText(string text)
     {
         Debug.Log(text);
         debugUI.text = text;

@@ -163,6 +163,7 @@ public class GPSscript : MonoBehaviour
             // A bit of silly hardcode but it'll have to do for now
             if(points == 100)
             {
+                Input.location.Stop();
                 StopCoroutine(LocationUpdate());
                 animator.SetFloat("Speed", 0f);
                 secondaryDebugUI.text = "Congratulations!\n" +

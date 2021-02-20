@@ -15,11 +15,18 @@ public class GPSscript : MonoBehaviour
 {
     public int desiredAccuracy = 1;
     public int updateDistance = 5;
+    public float updateFrequency = 1f;
 
     public TextMeshProUGUI debugUI;
     public TextMeshProUGUI secondaryDebugUI;
+    public AudioSource coinSound;   
 
     public Animator animator;
+
+    public int coinPoints = 5;
+
+    public bool DEBUG;
+    public float DEBUGSPEED;
     public static GPSscript Instance { set; get; }
 
     // X will be latitude, Y will be longitude
@@ -29,6 +36,7 @@ public class GPSscript : MonoBehaviour
     private float distanceTravelled = 0f;
     // Current speed in meters per second
     private float currentSpeed = 0f;
+    private int points = 0;
 
     // Start is called before the first frame update
     void Start()
@@ -36,6 +44,7 @@ public class GPSscript : MonoBehaviour
         Instance = this;
         DontDestroyOnLoad(gameObject);
         if (debugUI == null) Debug.Log("No debug UI given!");
+        if (secondaryDebugUI == null) Debug.Log("No secondary debug ui given!");
         if (animator == null) Debug.Log("No animator given!");
 
         // If the user doesn't have location permission enabled, ask the user to enable them
@@ -46,17 +55,11 @@ public class GPSscript : MonoBehaviour
         StartCoroutine(InitializeLocationService());
     }
 
+    // Initializes the location service.
+    // Based mostly on the example code provided by Unity documentation
+    // https://docs.unity3d.com/ScriptReference/LocationService.Start.html
     IEnumerator InitializeLocationService()
     {
-        // Thanks Stackoverflow
-        // https://stackoverflow.com/questions/45340418/input-locationservice-isenabledbyuser-returning-false-with-unity-remote-in-the-e
-        #if UNITY_EDITOR
-        //Wait until Unity connects to the Unity Remote, while not connected, yield return null
-        while (!UnityEditor.EditorApplication.isRemoteConnected)
-        {
-            yield return null;
-        }
-        #endif
         // First check if the user has location service enabled
         if (!Input.location.isEnabledByUser)
         {
@@ -83,6 +86,7 @@ public class GPSscript : MonoBehaviour
             yield break;
         }
 
+        // Service started, let's begin polling location
         if (Input.location.status == LocationServiceStatus.Running)
         {
             UpdateDebugText("Location Service is running succesfully");
@@ -90,37 +94,37 @@ public class GPSscript : MonoBehaviour
         }
     }
 
-    // Update is called once per frame
-    void Update()
-    {
-        // secondaryDebugUI.text = Input.location.status.ToString();
-    }
 
+    // Coroutine which polls the location service for coordinates.
     IEnumerator LocationUpdate()
     {
+        // Sometimes when the location service is starting, it can give pretty wild location info.
+        // This bit will hopefully prevent those crazy infos from jolting the character to victory instantly
+        yield return new WaitForSecondsRealtime(5f);
         int tick = -1;
         while (Input.location.status == LocationServiceStatus.Running)
         {
             tick++;
-            
+
+            // This is pretty much for the only poll, since otherwise it would put crazy 
+            // values as distance travelled and speed for the first tick
             if (oldCoordinates.x == 0 || oldCoordinates.y == 0)
             {
                 oldCoordinates.x = Input.location.lastData.latitude;
                 oldCoordinates.y = Input.location.lastData.longitude;
                 UpdateDebugText(String.Format("No coordinates yet, tick: {0}\n" +
                                               "Latitude: {1}\n" +
-                                              "Longitude: {2}",  tick, oldCoordinates.x, oldCoordinates.y));
+                                              "Longitude: {2}", tick, oldCoordinates.x, oldCoordinates.y));
             }
 
             newCoordinates.x = Input.location.lastData.latitude;
             newCoordinates.y = Input.location.lastData.longitude;
 
-            
             float distance = DistanceBetweenCoordinates(oldCoordinates, newCoordinates);
             currentSpeed = distance;
             animator.SetFloat("Speed", currentSpeed);
             distanceTravelled += distance;
-            
+
             oldCoordinates = newCoordinates;
 
             string temp = String.Format("fetching new coords \n" +
@@ -128,11 +132,48 @@ public class GPSscript : MonoBehaviour
                                         "Longitude: {1}\n" +
                                         "Speed: {2} m/s\n" +
                                         "Tick: {3}\n" +
-                                        "Distance Travelled: {4}", newCoordinates.x, newCoordinates.y, currentSpeed, tick, distanceTravelled);
+                                        "Distance Travelled: {4:f2} m\n" +
+                                        "Points: {5}", newCoordinates.x, newCoordinates.y, currentSpeed, tick, distanceTravelled, points);
             UpdateDebugText(temp);
-            yield return new WaitForSecondsRealtime(1f);
+            yield return new WaitForSecondsRealtime(updateFrequency);
         }
     }
+
+    // Update is called once per frame
+    void Update()
+    {
+        // For debugging basic mechanics
+        if(DEBUG)
+        {
+            animator.SetFloat("Speed", DEBUGSPEED);
+            this.transform.position += transform.forward * DEBUGSPEED *Time.deltaTime;
+        } else
+        {
+            this.transform.position += transform.forward * currentSpeed * Time.deltaTime;
+        }
+    }
+
+    private void OnTriggerEnter(Collider other)
+    {
+        Debug.Log("Hit something!");
+        if(other.CompareTag("Coin"))
+        {
+            Debug.Log("Got coin!");
+            points += coinPoints;
+            Destroy(other.gameObject);
+            coinSound.Play();
+            // A bit of silly hardcode but it'll have to do for now
+            if(points == 100)
+            {
+                StopCoroutine(LocationUpdate());
+                animator.SetFloat("Speed", 0f);
+                secondaryDebugUI.text = "Congratulations!\n" +
+                                        "You are the ultimate walker/runner!\n" +
+                                        "Close and restart the app to try again!";
+            }
+        }
+    }
+
 
     /// <summary>
     /// Calculates the distance in meters between 2 coordinates.
